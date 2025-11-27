@@ -118,6 +118,14 @@ app.post('/api/generate-tryon', async (req, res) => {
         if (!geminiResponse.ok) {
             const errorText = await geminiResponse.text();
             console.error(`Gemini API Error: ${geminiResponse.status}`, errorText);
+            
+            // RUTHLESS FIX: Handle Quota/Billing Errors Gracefully
+            if (geminiResponse.status === 429 || geminiResponse.status == '429') {
+                return res.status(429).json({ 
+                    error: "Quota Exceeded. The 'Virtual Try-On' feature (Image-to-Image) requires the 'gemini-2.5-flash-image' model, which is currently not available on the Gemini API Free Tier. Please enable billing in Google AI Studio to use this feature." 
+                });
+            }
+            
             throw new Error(`Gemini API error: ${geminiResponse.status} - ${errorText}`);
         }
 
@@ -151,6 +159,14 @@ app.post('/api/generate-tryon', async (req, res) => {
 
     } catch (error) {
         console.error("Server Error:", error);
+        
+        // RUTHLESS FIX: Catch-all for 429 errors to prevent crashes
+        if (error.message.includes("429") || error.message.includes("Quota")) {
+             return res.status(429).json({ 
+                error: "Quota Exceeded. Please enable billing to use the Virtual Try-On feature." 
+            });
+        }
+
         res.status(500).json({ error: error.message });
     }
 });
