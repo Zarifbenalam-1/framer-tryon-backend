@@ -99,8 +99,8 @@ app.post('/api/generate-tryon', async (req, res) => {
         };
 
         // 4. Call Gemini API
-        // Using Gemini 2.5 Flash as per documentation
-        const geminiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
+        // Using Gemini 2.5 Flash Image (Nano Banana) for native image generation
+        const geminiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent";
         
         if (!process.env.GEMINI_API_KEY) {
             throw new Error("Server Misconfiguration: GEMINI_API_KEY is missing");
@@ -122,6 +122,7 @@ app.post('/api/generate-tryon', async (req, res) => {
         }
 
         const data = await geminiResponse.json();
+        console.log("Gemini Response:", JSON.stringify(data, null, 2)); // Log full response for debugging
 
         // RUTHLESS FIX: Handle Safety Blocks & Empty Responses
         const candidate = data.candidates?.[0];
@@ -140,7 +141,8 @@ app.post('/api/generate-tryon', async (req, res) => {
         // Safe parsing
         const parts = candidate.content?.parts;
         if (!parts || parts.length === 0) {
-             throw new Error("Gemini returned a success status but no content parts.");
+             console.error("Gemini returned success but no parts. Full response:", JSON.stringify(data));
+             return res.status(400).json({ error: "The AI could not generate an image for this photo. Please try a different one." });
         }
 
         // 5. Send result back to frontend
