@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Framer Try-On Server Dashboard</title>
+    <style>
+        :root {
+            --bg: #0f0f0f;
+            --surface: #1a1a1a;
+            --primary: #0099ff;
+            --text: #ffffff;
+            --text-dim: #888888;
+            --success: #00cc66;
+            --error: #ff3333;
+            --border: #333333;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: 40px;
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        h1 { margin-bottom: 10px; }
+        .subtitle { color: var(--text-dim); margin-bottom: 40px; }
+        
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 24px;
+        }
+        .card-header {
+            font-size: 1.2em;
+            font-weight: 600;
+            margin-bottom: 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .input-group { margin-bottom: 16px; }
+        label { display: block; color: var(--text-dim); margin-bottom: 8px; font-size: 0.9em; }
+        input[type="text"], input[type="password"] {
+            width: 100%;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 1em;
+            box-sizing: border-box;
+        }
+        input:focus { outline: 2px solid var(--primary); border-color: transparent; }
+        
+        button {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 1em;
+            cursor: pointer;
+            font-weight: 500;
+            transition: opacity 0.2s;
+        }
+        button:hover { opacity: 0.9; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        button.secondary { background: var(--border); }
+        
+        .status-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--text-dim);
+            margin-right: 8px;
+        }
+        .status-indicator.active { background: var(--success); }
+        .status-indicator.error { background: var(--error); }
+        
+        pre {
+            background: var(--bg);
+            padding: 16px;
+            border-radius: 8px;
+            overflow-x: auto;
+            font-size: 0.9em;
+            color: var(--text-dim);
+            border: 1px solid var(--border);
+        }
+
+        .log-entry { margin-bottom: 4px; }
+        .log-success { color: var(--success); }
+        .log-error { color: var(--error); }
+        .log-info { color: var(--primary); }
+
+        #imagePreview {
+            margin-top: 20px;
+            max-width: 100%;
+            border-radius: 8px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Server Dashboard</h1>
+        <div class="subtitle">Manage API Keys & Test Connections</div>
+
+        <!-- API Key Config -->
+        <div class="card">
+            <div class="card-header">
+                API Configuration
+                <span id="configStatus" style="font-size: 0.8em; color: var(--text-dim); font-weight: normal;">Using Environment Variable</span>
+            </div>
+            
+            <div class="input-group">
+                <label>Gemini API Key</label>
+                <div style="display: flex; gap: 10px;">
+                    <input type="password" id="apiKeyInput" placeholder="Enter new API Key (starts with AIza...)">
+                    <button onclick="updateConfig()">Update Key</button>
+                </div>
+            </div>
+
+            <div class="input-group">
+                <label>Hugging Face Token (Optional)</label>
+                <div style="margin-bottom: 4px; font-size: 0.8em; color: var(--text-dim);">
+                    Status: <span id="hfTokenStatus">Checking...</span>
+                </div>
+                <div style="display: flex; gap: 10px;">
+                    <input type="password" id="hfTokenInput" placeholder="Enter HF Token (starts with hf_...)">
+                    <button onclick="updateConfig()">Update Token</button>
+                </div>
+            </div>
+
+            <div class="input-group">
+                <label>Select Provider</label>
+                <div style="display: flex; gap: 10px;">
+                    <select id="providerSelect" style="width: 100%; padding: 12px; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 8px;">
+                        <option value="gemini">Google Gemini</option>
+                        <option value="huggingface">Hugging Face (Free IDM-VTON)</option>
+                    </select>
+                    <button onclick="updateConfig()">Set Provider</button>
+                </div>
+            </div>
+
+            <div class="input-group">
+                <label>Select Model</label>
+                <div style="margin-bottom: 8px; font-size: 0.8em; color: var(--text-dim);">
+                    Server Default: <span id="envModelDisplay" style="color: var(--primary);">Loading...</span>
+                </div>
+                <div style="display: flex; gap: 10px;">
+                    <select id="modelSelect" style="width: 100%; padding: 12px; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 8px;">
+                        <option value="gemini-2.5-flash-image">gemini-2.5-flash-image</option>
+                        <option value="gemini-2.0-flash-exp">gemini-2.0-flash-exp</option>
+                    </select>
+                    <button class="secondary" onclick="validateKey()">Fetch Models</button>
+                    <button onclick="updateConfig()">Set Model</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Diagnostics -->
+        <div class="card">
+            <div class="card-header">
+                Diagnostics
+            </div>
+            <div style="display: flex; gap: 12px; margin-bottom: 20px;">
+                <button class="secondary" onclick="checkHealth()">Check Server Health</button>
+                <button class="secondary" onclick="validateKey()">Validate API Key</button>
+                <button onclick="runTestGeneration()">Run Test Generation</button>
+            </div>
+            
+            <label>Console Output</label>
+            <pre id="consoleOutput">Waiting for actions...</pre>
+            
+            <img id="imagePreview" alt="Generated Result" />
+        </div>
+    </div>
+
+    <script>
+        const log = (msg, type = 'normal') => {
+            const el = document.getElementById('consoleOutput');
+            const time = new Date().toLocaleTimeString();
+            let colorClass = '';
+            if (type === 'success') colorClass = 'log-success';
+            if (type === 'error') colorClass = 'log-error';
+            if (type === 'info') colorClass = 'log-info';
+            
+            el.innerHTML = `<div class="log-entry ${colorClass}">[${time}] ${msg}</div>` + el.innerHTML;
+        };
+
+        async function updateConfig() {
+            const key = document.getElementById('apiKeyInput').value;
+            const hfToken = document.getElementById('hfTokenInput').value;
+            const model = document.getElementById('modelSelect').value;
+            const provider = document.getElementById('providerSelect').value;
+            
+            const payload = {};
+            if (key) payload.apiKey = key;
+            if (hfToken) payload.hfToken = hfToken;
+            if (model) payload.model = model;
+            if (provider) payload.provider = provider;
+
+            if (Object.keys(payload).length === 0) return log('Nothing to update.', 'info');
+            
+            try {
+                const res = await fetch('/api/admin/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    log(`Configuration updated. Provider: ${data.currentProvider}, Model: ${data.currentModel}`, 'success');
+                    document.getElementById('configStatus').innerText = 'Using Runtime Override';
+                    
+                    if (data.hasHfToken) {
+                        document.getElementById('hfTokenStatus').innerHTML = '<span style="color: var(--success)">Active (Runtime)</span>';
+                    }
+
+                    // RUTHLESS MENTOR: Remind them about persistence
+                    if (payload.model || payload.provider) {
+                        log(`⚠️ IMPORTANT: To make changes permanent, update GEMINI_MODEL or AI_PROVIDER in Render.`, 'info');
+                    }
+
+                    if (key) document.getElementById('apiKeyInput').value = '';
+                    if (hfToken) document.getElementById('hfTokenInput').value = '';
+                } else {
+                    log('Error updating config: ' + data.error, 'error');
+                }
+            } catch (e) {
+                log('Network error: ' + e.message, 'error');
+            }
+        }
+
+        async function checkHealth() {
+            try {
+                const res = await fetch('/health');
+                const text = await res.text();
+                log(`Health Check: ${res.status} ${res.statusText} - ${text}`, res.ok ? 'success' : 'error');
+            } catch (e) {
+                log('Health check failed: ' + e.message, 'error');
+            }
+        }
+
+        async function validateKey() {
+            log('Validating API Key & Fetching Models...', 'info');
+            try {
+                const res = await fetch('/api/admin/validate-key', { method: 'POST' });
+                const data = await res.json();
+                
+                if (res.ok && data.valid) {
+                    log(`API Key is VALID. Found ${data.models.length} models.`, 'success');
+                    
+                    // Update Env Display
+                    document.getElementById('envModelDisplay').innerText = data.envModel;
+
+                    // Update HF Token Status
+                    const hfStatus = document.getElementById('hfTokenStatus');
+                    if (data.hasHfToken) {
+                        hfStatus.innerHTML = '<span style="color: var(--success)">Active</span>';
+                    } else {
+                        hfStatus.innerHTML = '<span style="color: var(--text-dim)">Not Set (Using Free Tier)</span>';
+                    }
+
+                    // Populate Dropdown
+                    const select = document.getElementById('modelSelect');
+                    const current = data.currentModel;
+                    select.innerHTML = ''; // Clear existing
+                    
+                    data.models.forEach(m => {
+                        const opt = document.createElement('option');
+                        opt.value = m;
+                        opt.text = m;
+                        if (m === current) opt.selected = true;
+                        select.appendChild(opt);
+                    });
+                    
+                    log(`Dropdown updated. Current model: ${current}`, 'info');
+
+                } else {
+                    log(`API Key Validation Failed: ${data.error}`, 'error');
+                }
+            } catch (e) {
+                log('Validation request failed: ' + e.message, 'error');
+            }
+        }
+
+        async function runTestGeneration() {
+            log('Starting test generation (this may take 10-20s)...', 'info');
+            document.getElementById('imagePreview').style.display = 'none';
+            
+            try {
+                // We use the admin test endpoint which should handle the dummy data
+                const res = await fetch('/api/admin/test-generation', { method: 'POST' });
+                const data = await res.json();
+
+                if (res.ok) {
+                    log('Generation Successful!', 'success');
+                    // Assuming the standard response format we use in the main app
+                    // The main app returns the raw Gemini response. 
+                    // We need to extract the image.
+                    // Usually: candidates[0].content.parts[0].inlineData.data
+                    
+                    try {
+                        const base64 = data.candidates[0].content.parts[0].inlineData.data;
+                        const img = document.getElementById('imagePreview');
+                        img.src = `data:image/jpeg;base64,${base64}`;
+                        img.style.display = 'block';
+                        log('Image rendered below.', 'success');
+                    } catch (parseError) {
+                        log('Generated, but could not parse image data from response.', 'error');
+                        console.log(data);
+                    }
+                } else {
+                    log(`Generation Failed: ${data.error}`, 'error');
+                }
+            } catch (e) {
+                log('Test generation error: ' + e.message, 'error');
+            }
+        }
+    </script>
+</body>
+</html>
