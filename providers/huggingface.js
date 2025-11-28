@@ -17,11 +17,12 @@ class HuggingFaceProvider extends AIProvider {
             const token = this.config.hfToken || process.env.HF_TOKEN;
             const options = {};
             
-            if (token) {
-                options.hf_token = token;
-                console.log("🔑 Using HF_TOKEN for authentication");
+            if (token && token.trim().length > 0) {
+                options.hf_token = token.trim();
+                console.log(`🔑 Using HF_TOKEN for authentication (Token starts with: ${token.substring(0, 4)}...)`);
             } else {
-                console.log("⚠️ No HF_TOKEN found. Using Free Tier (Rate limits may apply).");
+                console.log("⚠️ No HF_TOKEN found (or empty). Using Free Tier (Rate limits may apply).");
+                console.log(`Debug: config.hfToken=${this.config.hfToken ? 'SET' : 'NULL'}, env.HF_TOKEN=${process.env.HF_TOKEN ? 'SET' : 'NULL'}`);
             }
             
             const client = await Client.connect(this.spaceId, options);
