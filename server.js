@@ -143,7 +143,7 @@ app.post('/api/admin/config', (req, res) => {
     }
 
     if (hfToken !== undefined) { // Allow empty string to clear it
-        currentHfToken = hfToken;
+        currentHfToken = hfToken ? hfToken.trim() : "";
         console.log('HF Token updated via Dashboard');
     }
     
