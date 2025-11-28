@@ -19,6 +19,8 @@ class HuggingFaceProvider extends AIProvider {
             
             if (token && token.trim().length > 0) {
                 options.hf_token = token.trim();
+                // RUTHLESS FIX: Explicitly set Authorization header to ensure ZeroGPU sees the token
+                options.headers = { "Authorization": `Bearer ${token.trim()}` };
                 console.log(`🔑 Using HF_TOKEN for authentication (Token starts with: ${token.substring(0, 4)}...)`);
             } else {
                 console.log("⚠️ No HF_TOKEN found (or empty). Using Free Tier (Rate limits may apply).");
