@@ -1,9 +1,13 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const path = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// Global Runtime Config (allows changing key without redeploy)
+let currentApiKey = process.env.GEMINI_API_KEY;
 
 // Middleware
 // RUTHLESS SECURITY: Allow only your Framer site in production.
@@ -11,8 +15,14 @@ const PORT = process.env.PORT || 3000;
 const allowedOrigin = process.env.ALLOWED_ORIGIN || '*';
 app.use(cors({
     origin: allowedOrigin,
-    methods: ['POST']
+    methods: ['GET', 'POST'] // Added GET for dashboard
 }));
+
+// Serve Dashboard
+app.use(express.static(path.join(__dirname, 'public')));
+app.get('/admin', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
+});
 
 // RUTHLESS FIX: Prevent DoS. Default to 10mb, allow env override.
 const maxBodySize = process.env.MAX_BODY_SIZE || '10mb';
@@ -102,7 +112,7 @@ app.post('/api/generate-tryon', async (req, res) => {
         // Using Gemini 2.5 Flash Image (Nano Banana) for native image generation
         const geminiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent";
         
-        if (!process.env.GEMINI_API_KEY) {
+        if (!currentApiKey) {
             throw new Error("Server Misconfiguration: GEMINI_API_KEY is missing");
         }
 
@@ -110,7 +120,7 @@ app.post('/api/generate-tryon', async (req, res) => {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
-                "x-goog-api-key": process.env.GEMINI_API_KEY
+                "x-goog-api-key": currentApiKey
             },
             body: JSON.stringify(geminiPayload)
         });
@@ -167,6 +177,100 @@ app.post('/api/generate-tryon', async (req, res) => {
             });
         }
 
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// --- ADMIN DASHBOARD ENDPOINTS ---
+
+// 1. Update API Key (Runtime only)
+app.post('/api/admin/config', (req, res) => {
+    const { apiKey } = req.body;
+    if (!apiKey) return res.status(400).json({ error: 'API Key is required' });
+    
+    currentApiKey = apiKey;
+    console.log('API Key updated via Dashboard (Runtime Override)');
+    res.json({ success: true, message: 'API Key updated for this session.' });
+});
+
+// 2. Validate API Key
+app.post('/api/admin/validate-key', async (req, res) => {
+    try {
+        if (!currentApiKey) return res.status(400).json({ error: 'No API Key set' });
+
+        // List models to check auth
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${currentApiKey}`);
+        const data = await response.json();
+
+        if (!response.ok) {
+            return res.status(response.status).json({ error: data.error?.message || 'Validation failed' });
+        }
+
+        // Check if our required model exists
+        const hasImageModel = data.models?.some(m => m.name.includes('gemini-2.5-flash-image'));
+        
+        res.json({ 
+            valid: true, 
+            models: data.models?.map(m => m.name).join(', '),
+            hasRequiredModel: hasImageModel
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// 3. Run Test Generation (End-to-End)
+app.post('/api/admin/test-generation', async (req, res) => {
+    try {
+        console.log("Starting Admin Test Generation...");
+        
+        // A. Fetch Dummy Images (Portrait & T-Shirt)
+        // Using Unsplash source URLs which redirect to actual images
+        const userImgUrl = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&q=80"; // Portrait
+        const productImgUrl = "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=400&q=80"; // T-Shirt
+
+        const [userRes, prodRes] = await Promise.all([fetch(userImgUrl), fetch(productImgUrl)]);
+        
+        if (!userRes.ok || !prodRes.ok) throw new Error("Failed to fetch test images from Unsplash");
+
+        const userBuff = await userRes.arrayBuffer();
+        const prodBuff = await prodRes.arrayBuffer();
+
+        const userBase64 = Buffer.from(userBuff).toString('base64');
+        const prodBase64 = Buffer.from(prodBuff).toString('base64');
+
+        // B. Construct Payload (Same as main endpoint)
+        const geminiPayload = {
+            contents: [{
+                parts: [
+                    { text: "Drape the clothing from the product image onto the person in the user photo." },
+                    { inline_data: { mime_type: "image/jpeg", data: userBase64 } },
+                    { inline_data: { mime_type: "image/jpeg", data: prodBase64 } }
+                ]
+            }]
+        };
+
+        // C. Call Gemini
+        const geminiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent";
+        const geminiResponse = await fetch(geminiUrl, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "x-goog-api-key": currentApiKey
+            },
+            body: JSON.stringify(geminiPayload)
+        });
+
+        const data = await geminiResponse.json();
+        
+        if (!geminiResponse.ok) {
+            return res.status(geminiResponse.status).json({ error: JSON.stringify(data) });
+        }
+
+        res.json(data);
+
+    } catch (error) {
+        console.error("Test Gen Error:", error);
         res.status(500).json({ error: error.message });
     }
 });
